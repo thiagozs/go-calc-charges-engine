@@ -272,8 +272,8 @@ go run ./exemplos/with_charges
 
 ## License
 
-Este projeto é distribuído sob a Licença MIT. Consulte o arquivo LICENSE para obter detalhes.
+Este projeto é distribuído sob a Licença MIT. Consulte o arquivo [LICENSE](LICENSE) para obter detalhes.
 
 ## Autor
 
-2026, Thiago Zilli Sarmento ❤️
+2026, Thiago Zilli Sarmento :heart:
