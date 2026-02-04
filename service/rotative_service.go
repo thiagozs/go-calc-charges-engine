@@ -28,3 +28,21 @@ func (s *RotativeService) Calculate(balance domain.RotativeBalance,
 		s.RulesConfig,
 	)
 }
+
+func NewRotativeService(cfg config.EngineConfig) *RotativeService {
+	return &RotativeService{
+		IOFConfig:          cfg.IOF,
+		InterestConfig:     cfg.Interest,
+		LateFeeConfig:      cfg.LateFee,
+		LateInterestConfig: cfg.LateInterest,
+		RulesConfig:        cfg.Rules,
+	}
+}
+
+func NewRotativeServiceFromEnv() (*RotativeService, error) {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewRotativeService(cfg), nil
+}

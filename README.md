@@ -74,6 +74,42 @@ type InternationalIOFConfig struct {
 }
 ```
 
+## Configuracao via variaveis de ambiente
+
+A lib suporta carregar configuracoes via variaveis de ambiente com valores padrao.
+
+Principais variaveis:
+
+- `IOF_DAILY_RATE` (default 0.000082)
+- `IOF_ADDITIONAL_RATE` (default 0.0038)
+- `IOF_MAX_ANNUAL_RATE` (default 0.0408)
+- `ROTATIVE_MONTHLY_RATE` (default 0.12)
+- `LATE_FEE_RATE` (default 0.02)
+- `LATE_INTEREST_MONTHLY_RATE` (default 0.01)
+- `ROTATIVE_MAX_DAYS` (default 30)
+- `ROTATIVE_MAX_CHARGE_RATE` (default 1.0)
+- `INTERNATIONAL_IOF_RATE` (default 0.035)
+
+Exemplo de uso:
+
+```go
+cfg, err := config.LoadFromEnv()
+if err != nil {
+	log.Fatal(err)
+}
+
+svc := service.NewRotativeService(cfg)
+```
+
+Ou direto:
+
+```go
+svc, err := service.NewRotativeServiceFromEnv()
+if err != nil {
+	log.Fatal(err)
+}
+```
+
 ## Metodos disponiveis (publicos)
 
 Pacote `calc`:
