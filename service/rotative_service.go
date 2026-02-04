@@ -3,9 +3,9 @@ package service
 import (
 	"time"
 
-	"github.com/thiagozs/go-credit-card-engine/calc"
-	"github.com/thiagozs/go-credit-card-engine/config"
-	"github.com/thiagozs/go-credit-card-engine/domain"
+	"github.com/thiagozs/go-calc-charges-engine/calc"
+	"github.com/thiagozs/go-calc-charges-engine/config"
+	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
 type RotativeService struct {

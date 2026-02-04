@@ -3,8 +3,8 @@ package calc
 import (
 	"math"
 
-	"github.com/thiagozs/go-credit-card-engine/config"
-	"github.com/thiagozs/go-credit-card-engine/domain"
+	"github.com/thiagozs/go-calc-charges-engine/config"
+	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
 func CalculateLateInterest(principal domain.Money, days int, cfg config.LateInterestConfig) domain.Money {

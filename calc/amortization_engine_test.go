@@ -3,7 +3,7 @@ package calc
 import (
 	"testing"
 
-	"github.com/thiagozs/go-credit-card-engine/domain"
+	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
 func TestApplyPayment(t *testing.T) {

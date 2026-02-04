@@ -3,7 +3,7 @@ package calc
 import (
 	"time"
 
-	"github.com/thiagozs/go-credit-card-engine/config"
+	"github.com/thiagozs/go-calc-charges-engine/config"
 )
 
 func defaultIOFConfig() config.IOFConfig {

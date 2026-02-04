@@ -1,6 +1,6 @@
 package calc
 
-import "github.com/thiagozs/go-credit-card-engine/domain"
+import "github.com/thiagozs/go-calc-charges-engine/domain"
 
 // AmortizationResult detalha como o pagamento foi aplicado
 type AmortizationResult struct {

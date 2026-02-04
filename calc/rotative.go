@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/thiagozs/go-credit-card-engine/config"
-	"github.com/thiagozs/go-credit-card-engine/domain"
+	"github.com/thiagozs/go-calc-charges-engine/config"
+	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
 type RotativeResult struct {
