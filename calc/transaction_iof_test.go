@@ -8,7 +8,7 @@ import (
 )
 
 func TestCalculateInternationalIOF(t *testing.T) {
-	cfg := config.InternationalIOFConfig{Rate: 0.035}
+	cfg := config.InternationalIOFConfig{Rate: 35_000}
 
 	tests := []struct {
 		name     string

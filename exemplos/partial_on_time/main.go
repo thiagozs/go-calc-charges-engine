@@ -24,7 +24,7 @@ func main() {
 	}
 
 	principal := sumTransactionsInCycle(transactions, cycleStart, closingDate)
-	internationalIOF := sumInternationalIOFInCycle(transactions, cycleStart, closingDate, config.InternationalIOFConfig{Rate: 0.035})
+	internationalIOF := sumInternationalIOFInCycle(transactions, cycleStart, closingDate, config.InternationalIOFConfig{Rate: 35_000})
 
 	invoice := domain.Invoice{
 		ID:          "inv-2024-01",
@@ -68,11 +68,11 @@ func main() {
 
 	remaining := invoice.TotalAmount - invoice.PaidAmount
 	if remaining > 0 && finalPaymentDate.After(dueDate) {
-		iofCfg := config.IOFConfig{DailyRate: 0.000082, AdditionalRate: 0.0038, MaxAnnualRate: 0.0408}
-		intCfg := config.InterestConfig{MonthlyRate: 0.12}
-		lateFeeCfg := config.LateFeeConfig{Rate: 0.02}
-		lateInterestCfg := config.LateInterestConfig{MonthlyRate: 0.01}
-		rulesCfg := config.RotativeRulesConfig{MaxDays: 30, MaxChargeRate: 1.0}
+		iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxAnnualRate: 40_800}
+		intCfg := config.InterestConfig{MonthlyRate: 120_000}
+		lateFeeCfg := config.LateFeeConfig{Rate: 20_000}
+		lateInterestCfg := config.LateInterestConfig{MonthlyRate: 10_000}
+		rulesCfg := config.RotativeRulesConfig{MaxDays: 30, MaxChargeRate: 1_000_000}
 
 		rotative := calc.CalculateRotative(
 			domain.RotativeBalance{Principal: remaining, StartDate: dueDate},

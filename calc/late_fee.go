@@ -1,16 +1,16 @@
 package calc
 
 import (
-	"math"
-
 	"github.com/thiagozs/go-calc-charges-engine/config"
 	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
+// CalculateLateFee computes the late payment fee (multa).
+//
+// Input validation (non-negative principal) is the caller's responsibility.
 func CalculateLateFee(principal domain.Money, cfg config.LateFeeConfig) domain.Money {
 	if cfg.Rate <= 0 {
 		return 0
 	}
-	fee := float64(principal) * cfg.Rate
-	return domain.Money(math.Round(fee))
+	return mulRate(principal, cfg.Rate)
 }

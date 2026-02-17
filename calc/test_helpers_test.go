@@ -8,34 +8,34 @@ import (
 
 func defaultIOFConfig() config.IOFConfig {
 	return config.IOFConfig{
-		DailyRate:      0.000082,
-		AdditionalRate: 0.0038,
-		MaxAnnualRate:  0.0408,
+		DailyRate:      82,
+		AdditionalRate: 3_800,
+		MaxAnnualRate:  40_800,
 	}
 }
 
 func defaultInterestConfig() config.InterestConfig {
 	return config.InterestConfig{
-		MonthlyRate: 0.12,
+		MonthlyRate: 120_000,
 	}
 }
 
 func defaultLateFeeConfig() config.LateFeeConfig {
 	return config.LateFeeConfig{
-		Rate: 0.02,
+		Rate: 20_000,
 	}
 }
 
 func defaultLateInterestConfig() config.LateInterestConfig {
 	return config.LateInterestConfig{
-		MonthlyRate: 0.01,
+		MonthlyRate: 10_000,
 	}
 }
 
 func defaultRotativeRulesConfig() config.RotativeRulesConfig {
 	return config.RotativeRulesConfig{
 		MaxDays:       30,
-		MaxChargeRate: 1.0,
+		MaxChargeRate: 1_000_000,
 	}
 }
 

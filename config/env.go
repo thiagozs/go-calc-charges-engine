@@ -9,6 +9,7 @@ type EngineConfig struct {
 	LateInterest     LateInterestConfig
 	Rules            RotativeRulesConfig
 	InternationalIOF InternationalIOFConfig
+	Installment      InstallmentConfig
 }
 
 func LoadFromEnv() (EngineConfig, error) {

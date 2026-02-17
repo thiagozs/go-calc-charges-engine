@@ -70,7 +70,7 @@ func TestCalculateRotative_ChargeCap(t *testing.T) {
 		StartDate: utcDate(2024, 1, 1),
 	}
 
-	highInterest := config.InterestConfig{MonthlyRate: 1.0}
+	highInterest := config.InterestConfig{MonthlyRate: 1_000_000}
 	result := CalculateRotative(
 		balance,
 		utcDate(2024, 1, 31),

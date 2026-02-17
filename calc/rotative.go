@@ -1,13 +1,14 @@
 package calc
 
 import (
-	"math"
 	"time"
 
 	"github.com/thiagozs/go-calc-charges-engine/config"
 	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
+// RotativeResult contains the breakdown of rotative credit charges.
+// The caller (ledger) should persist this struct for audit trail purposes.
 type RotativeResult struct {
 	Principal    domain.Money
 	Interest     domain.Money
@@ -21,6 +22,9 @@ type RotativeResult struct {
 	ChargeCapped bool
 }
 
+// CalculateRotative computes all charges for a rotative credit balance.
+//
+// Input validation (non-negative principal, valid dates) is the caller's responsibility.
 func CalculateRotative(
 	balance domain.RotativeBalance,
 	calcDate time.Time,
@@ -53,7 +57,7 @@ func CalculateRotative(
 	charges := interest + iof + lateFee + lateInterest
 	chargeCapped := false
 	if rulesCfg.MaxChargeRate > 0 {
-		maxCharges := domain.Money(math.Round(float64(balance.Principal) * rulesCfg.MaxChargeRate))
+		maxCharges := mulRate(balance.Principal, rulesCfg.MaxChargeRate)
 		if charges > maxCharges {
 			chargeCapped = true
 			interest = max(maxCharges-(iof+lateFee+lateInterest), 0)

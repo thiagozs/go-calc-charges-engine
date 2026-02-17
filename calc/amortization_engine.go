@@ -2,7 +2,8 @@ package calc
 
 import "github.com/thiagozs/go-calc-charges-engine/domain"
 
-// AmortizationResult detalha como o pagamento foi aplicado
+// AmortizationResult detalha como o pagamento foi aplicado seguindo a regra bancaria.
+// The caller (ledger) should persist this struct for audit trail purposes.
 type AmortizationResult struct {
 	PaidIOF          domain.Money
 	PaidInterest     domain.Money
@@ -72,9 +73,9 @@ func ApplyPayment(
 	return result
 }
 
-func min(a, b domain.Money) domain.Money {
-	if a < b {
-		return a
-	}
-	return b
-}
+// func min(a, b domain.Money) domain.Money {
+// 	if a < b {
+// 		return a
+// 	}
+// 	return b
+// }

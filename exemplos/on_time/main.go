@@ -23,7 +23,7 @@ func main() {
 	}
 
 	principal := sumTransactionsInCycle(transactions, cycleStart, closingDate)
-	internationalIOF := sumInternationalIOFInCycle(transactions, cycleStart, closingDate, config.InternationalIOFConfig{Rate: 0.035})
+	internationalIOF := sumInternationalIOFInCycle(transactions, cycleStart, closingDate, config.InternationalIOFConfig{Rate: 35_000})
 
 	invoice := domain.Invoice{
 		ID:          "inv-2024-01",
