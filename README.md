@@ -8,13 +8,14 @@ Motor simples para cálculo de encargos de cartão de crédito (Brasil), com IOF
 - Aritmética inteira pura: taxas representadas como `domain.Rate` (inteiro por milhão), sem uso de float64.
 - APIs pequenas: funções no pacote `calc` e serviços em `service`.
 - Exemplos prontos em `exemplos/` para validar o fluxo.
+- Regras, alíquotas e fontes oficiais (Decreto 6.306, Res. CMN 4.549, Lei 14.690) em [`CALC_FORMULA.md`](CALC_FORMULA.md), inclusive as pendências ainda não confirmadas.
 
 ## Estrutura do projeto
 
-- `calc`: funções de cálculo (IOF, juros, multa, rotativo, parcelamento e amortização).
-- `config`: structs de taxas e regras.
-- `domain`: tipos base (Money, Rate, Invoice, Transaction, RotativeBalance, InstallmentPlan).
-- `service`: serviços de alto nível para rotativo e parcelamento.
+- `calc`: funções de cálculo (IOF, juros, multa, rotativo, parcelamento e amortização) e os erros tipados (`calc/errors.go`).
+- `config`: structs de taxas e regras, carga por variáveis de ambiente e `Validate()`.
+- `domain`: tipos base (Money, Rate e `ParseRate`, Invoice, Transaction, RotativeBalance, InstallmentPlan).
+- `service`: serviços de alto nível para rotativo, parcelamento e IOF internacional.
 - `exemplos`: cenários executáveis.
 
 ## Tipos principais
@@ -133,6 +134,7 @@ if err != nil {
 
 svc := service.NewRotativeService(cfg)
 instSvc := service.NewInstallmentService(cfg)
+iofSvc := service.NewInternationalIOFService(cfg)
 ```
 
 Ou direto:
@@ -142,7 +144,11 @@ svc, err := service.NewRotativeServiceFromEnv()
 if err != nil {
 	log.Fatal(err)
 }
+
+instSvc, err := service.NewInstallmentServiceFromEnv()
 ```
+
+`LoadFromEnv` retorna erro se alguma taxa for negativa ou malformada (`EngineConfig.Validate`).
 
 ## Metodos disponiveis (publicos)
 
@@ -154,6 +160,7 @@ func CalculateRotativeInterest(principal domain.Money, days int, cfg config.Inte
 func CalculateLateFee(principal domain.Money, cfg config.LateFeeConfig) domain.Money
 func CalculateLateInterest(principal domain.Money, days int, cfg config.LateInterestConfig) domain.Money
 func CalculateInternationalIOF(amount domain.Money, cfg config.InternationalIOFConfig) domain.Money
+func CalculateInternationalIOFChecked(amount domain.Money, cfg config.InternationalIOFConfig) (domain.Money, error) // valida entrada
 func CalculateRotative(
 	balance domain.RotativeBalance,
 	calcDate time.Time,
@@ -164,6 +171,8 @@ func CalculateRotative(
 	rulesCfg config.RotativeRulesConfig,
 ) (RotativeResult, error)
 func ApplyPayment(debt Debt, payment domain.Money) (AmortizationResult, error)
+// Debt{IOF, Interest, LateInterest, LateFee, Principal}; RotativeResult.Debt() monta a Debt do rotativo.
+// AmortizationResult: Paid* por componente, Remaining (saldo) e Excess (pagamento acima da divida).
 func CalculateInstallmentPlan(
 	totalAmount domain.Money,
 	numInstallments int,
@@ -182,6 +191,16 @@ func (s *RotativeService) Calculate(balance domain.RotativeBalance, at time.Time
 
 type InstallmentService struct { ... }
 func (s *InstallmentService) Calculate(amount domain.Money, numInstallments int, purchaseDate time.Time, firstDueDate time.Time) (domain.InstallmentPlan, error)
+
+type InternationalIOFService struct { ... }
+func (s *InternationalIOFService) Calculate(amount domain.Money) (domain.Money, error)
+
+// Construtores (os campos dos servicos sao privados):
+func NewRotativeService(cfg config.EngineConfig) *RotativeService
+func NewRotativeServiceFromEnv() (*RotativeService, error)
+func NewInstallmentService(cfg config.EngineConfig) *InstallmentService
+func NewInstallmentServiceFromEnv() (*InstallmentService, error)
+func NewInternationalIOFService(cfg config.EngineConfig) *InternationalIOFService
 ```
 
 ## Validacao e audit trail
@@ -190,7 +209,10 @@ func (s *InstallmentService) Calculate(amount domain.Money, numInstallments int,
 - **IOF:** o diario e limitado a `MaxDays` (365) dias (Decreto 6.306, art. 7, par. 1); o adicional de 0,38% e cobrado uma vez.
 - **Rotativo:** `CalculateRotative` e `RotativeService.Calculate` retornam `error` (`ErrInvalidAmount`, `ErrInvalidDate`, `ErrInvalidRate`, `ErrOverflow`). `config.LoadFromEnv` valida as taxas (`EngineConfig.Validate`).
 - **Parcelamento:** `CalculateInstallmentPlan` valida n (1..360), valor > 0, datas e taxas, e retorna `ErrInvalidInstallments`, `ErrInvalidAmount`, `ErrInvalidDate`, `ErrInvalidRate`, `ErrInfeasiblePlan` (prazo longo demais para o principal: o PMT arredondado nao amortiza) ou `ErrOverflow` (valores que nao cabem em int64). Vencimentos usam fim de mes (31/01 + 1 mes = 28/02) e dias sao contados por data civil (independe de fuso/DST).
-- **Validacao de inputs (demais calculos):** a engine nao valida inputs negativos. A validacao (principal >= 0, dias >= 0, datas validas) e responsabilidade do caller (ledger).
+- **ApplyPayment:** retorna `ErrNegativeAmount` (pagamento ou componente negativo) e `ErrOverflow` (soma da divida nao cabe em int64).
+- **IOF internacional:** use `CalculateInternationalIOFChecked` (ou `InternationalIOFService`) para validar a entrada; a versao sem `Checked` nao valida.
+- **Funcoes isoladas sem validacao:** `CalculateIOF`, `CalculateRotativeInterest`, `CalculateLateFee`, `CalculateLateInterest` e `CalculateInternationalIOF` nao validam entradas (principal >= 0, dias >= 0, sem overflow). Use `CalculateRotative`/`CalculateInstallmentPlan` ou os servicos, que validam e protegem contra overflow de `int64`; nas funcoes isoladas a validacao e responsabilidade do caller (ledger).
+- **Erros:** todos sao valores exportados de `calc` e funcionam com `errors.Is`.
 - **Audit trail:** as structs de resultado (`RotativeResult`, `AmortizationResult`, `InstallmentPlan`) contem o detalhamento completo dos calculos. O caller (ledger) deve persistir essas structs como entradas no historico para fins de auditoria.
 
 ## Como usar (exemplo rapido)
@@ -216,10 +238,16 @@ result, err := calc.CalculateRotative(
 	lateInterestCfg,
 	rulesCfg,
 )
+if err != nil {
+	log.Fatal(err) // ErrInvalidAmount, ErrInvalidDate, ErrInvalidRate ou ErrOverflow
+}
 
 // Aplicar pagamento (ordem: IOF -> juros -> mora -> multa -> principal)
 payment := domain.Money(20_000)
-amort, err := calc.ApplyPayment(result.Debt(), payment) // Debt{IOF, Interest, LateInterest, LateFee, Principal}
+amort, err := calc.ApplyPayment(result.Debt(), payment)
+if err != nil {
+	log.Fatal(err)
+}
 // amort.Excess = parte do pagamento acima da divida; amort.Remaining = saldo devedor
 ```
 
@@ -236,6 +264,9 @@ plan, err := calc.CalculateInstallmentPlan(
 	iofCfg,
 	config.InstallmentConfig{MonthlyRate: 0}, // 0 = sem juros
 )
+if err != nil {
+	log.Fatal(err)
+}
 
 // Com juros: 12x a 1.99% a.m.
 planJuros, err := calc.CalculateInstallmentPlan(
@@ -245,6 +276,9 @@ planJuros, err := calc.CalculateInstallmentPlan(
 	iofCfg,
 	config.InstallmentConfig{MonthlyRate: 19_900}, // 1.99% = 19_900
 )
+if err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## Exemplos e logs (fluxo por acao)
