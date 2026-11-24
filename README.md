@@ -372,20 +372,30 @@ Pagamento: 2024-02-25
 === Pagamento ===
 - Valor pago: R$ 200.00
 
-=== Encargos apos vencimento ===
+=== Encargos ate o pagamento ===
 - Dias em atraso: 15 (cobrados 15)
-- Saldo em atraso: R$ 368.38
-- IOF: R$ 1.85
-- Juros rotativo: R$ 22.10
-- Juros de mora: R$ 1.84
-- Multa: R$ 7.37
-- Total encargos: R$ 33.16
+- Saldo em atraso: R$ 568.38
+- IOF: R$ 2.86
+- Juros rotativo: R$ 34.10
+- Juros de mora: R$ 2.84
+- Multa: R$ 11.37
+- Total encargos: R$ 51.17
 - Teto aplicado: nao
 
+=== Aplicacao do pagamento ===
+- IOF: R$ 2.86
+- Juros rotativo: R$ 34.10
+- Juros de mora: R$ 2.84
+- Multa: R$ 11.37
+- Principal: R$ 148.83
+- Excedente: R$ 0.00
+
+- Saldo devedor apos o pagamento: R$ 419.55
+
 === Fatura final ===
-- Total: R$ 401.54
+- Total (com encargos): R$ 619.55
 - Pago: R$ 200.00
-- Em aberto: R$ 201.54
+- Em aberto: R$ 419.55
 ```
 
 ### exemplos/installments (parcelamento)

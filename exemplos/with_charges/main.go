@@ -60,53 +60,64 @@ func main() {
 	printSection("Pagamento")
 	fmt.Printf("- Valor pago: %s\n", formatMoney(payment))
 
-	if paymentDate.After(dueDate) {
-		remaining := invoice.TotalAmount - payment
-		if remaining < 0 {
-			remaining = 0
+	if paymentDate.After(dueDate) && invoice.TotalAmount > 0 {
+		iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
+		intCfg := config.InterestConfig{MonthlyRate: 120_000}
+		lateFeeCfg := config.LateFeeConfig{Rate: 20_000}
+		lateInterestCfg := config.LateInterestConfig{MonthlyRate: 10_000}
+		rulesCfg := config.RotativeRulesConfig{MaxDays: 30, MaxChargeRate: 1_000_000}
+
+		// A fatura inteira ficou em atraso ate a data do pagamento: os encargos correm
+		// sobre o total do vencimento (nao sobre o saldo apos o pagamento).
+		overdue := invoice.TotalAmount
+		rotative, err := calc.CalculateRotative(
+			domain.RotativeBalance{Principal: overdue, StartDate: dueDate},
+			paymentDate,
+			iofCfg,
+			intCfg,
+			lateFeeCfg,
+			lateInterestCfg,
+			rulesCfg,
+		)
+		if err != nil {
+			log.Fatal(err)
 		}
 
-		if remaining > 0 {
-			iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
-			intCfg := config.InterestConfig{MonthlyRate: 120_000}
-			lateFeeCfg := config.LateFeeConfig{Rate: 20_000}
-			lateInterestCfg := config.LateInterestConfig{MonthlyRate: 10_000}
-			rulesCfg := config.RotativeRulesConfig{MaxDays: 30, MaxChargeRate: 1_000_000}
-
-			rotative, err := calc.CalculateRotative(
-				domain.RotativeBalance{Principal: remaining, StartDate: dueDate},
-				paymentDate,
-				iofCfg,
-				intCfg,
-				lateFeeCfg,
-				lateInterestCfg,
-				rulesCfg,
-			)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			invoice.TotalAmount = rotative.Total
-			invoice.PaidAmount = payment
-
-			printSection("Encargos apos vencimento")
-			fmt.Printf("- Dias em atraso: %d (cobrados %d)\n", rotative.Days, rotative.ChargedDays)
-			fmt.Printf("- Saldo em atraso: %s\n", formatMoney(remaining))
-			fmt.Printf("- IOF: %s\n", formatMoney(rotative.IOF))
-			fmt.Printf("- Juros rotativo: %s\n", formatMoney(rotative.Interest))
-			fmt.Printf("- Juros de mora: %s\n", formatMoney(rotative.LateInterest))
-			fmt.Printf("- Multa: %s\n", formatMoney(rotative.LateFee))
-			fmt.Printf("- Total encargos: %s\n", formatMoney(rotative.Charges))
-			if rotative.ChargeCapped {
-				fmt.Printf("- Teto aplicado: sim\n")
-			} else {
-				fmt.Printf("- Teto aplicado: nao\n")
-			}
+		printSection("Encargos ate o pagamento")
+		fmt.Printf("- Dias em atraso: %d (cobrados %d)\n", rotative.Days, rotative.ChargedDays)
+		fmt.Printf("- Saldo em atraso: %s\n", formatMoney(overdue))
+		fmt.Printf("- IOF: %s\n", formatMoney(rotative.IOF))
+		fmt.Printf("- Juros rotativo: %s\n", formatMoney(rotative.Interest))
+		fmt.Printf("- Juros de mora: %s\n", formatMoney(rotative.LateInterest))
+		fmt.Printf("- Multa: %s\n", formatMoney(rotative.LateFee))
+		fmt.Printf("- Total encargos: %s\n", formatMoney(rotative.Charges))
+		if rotative.ChargeCapped {
+			fmt.Printf("- Teto aplicado: sim\n")
+		} else {
+			fmt.Printf("- Teto aplicado: nao\n")
 		}
+
+		// O pagamento abate na ordem IOF -> juros -> mora -> multa -> principal.
+		amort, err := calc.ApplyPayment(rotative.Debt(), payment)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		printSection("Aplicacao do pagamento")
+		fmt.Printf("- IOF: %s\n", formatMoney(amort.PaidIOF))
+		fmt.Printf("- Juros rotativo: %s\n", formatMoney(amort.PaidInterest))
+		fmt.Printf("- Juros de mora: %s\n", formatMoney(amort.PaidLateInterest))
+		fmt.Printf("- Multa: %s\n", formatMoney(amort.PaidLateFee))
+		fmt.Printf("- Principal: %s\n", formatMoney(amort.PaidPrincipal))
+		fmt.Printf("- Excedente: %s\n", formatMoney(amort.Excess))
+
+		invoice.TotalAmount = rotative.Total
+		invoice.PaidAmount = payment - amort.Excess
+		fmt.Printf("\n- Saldo devedor apos o pagamento: %s\n", formatMoney(amort.Remaining))
 	}
 
 	printSection("Fatura final")
-	fmt.Printf("- Total: %s\n", formatMoney(invoice.TotalAmount))
+	fmt.Printf("- Total (com encargos): %s\n", formatMoney(invoice.TotalAmount))
 	fmt.Printf("- Pago: %s\n", formatMoney(invoice.PaidAmount))
 	fmt.Printf("- Em aberto: %s\n", formatMoney(invoice.TotalAmount-invoice.PaidAmount))
 }
