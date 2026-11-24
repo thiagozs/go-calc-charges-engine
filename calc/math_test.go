@@ -3,8 +3,6 @@ package calc
 import (
 	"testing"
 	"time"
-
-	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
 func TestMulRate_ZeroPrincipal(t *testing.T) {
@@ -87,24 +85,33 @@ func TestAddMonths(t *testing.T) {
 	}
 }
 
-func TestFixedPow(t *testing.T) {
-	// (1 + 0.0199)^1 = 1.0199 => fixedPow(19900, 1) should be ~1_019_900
-	got := fixedPow(19_900, 1)
-	if got != 1_019_900 {
-		t.Fatalf("expected 1019900, got %d", got)
+func TestAddMonths_ClampsEndOfMonth(t *testing.T) {
+	cases := []struct {
+		base   time.Time
+		months int
+		want   time.Time
+	}{
+		{utcDate(2025, 1, 31), 1, utcDate(2025, 2, 28)},
+		{utcDate(2024, 1, 31), 1, utcDate(2024, 2, 29)},
+		{utcDate(2025, 1, 31), 2, utcDate(2025, 3, 31)},
+		{utcDate(2025, 11, 30), 3, utcDate(2026, 2, 28)},
 	}
-
-	// (1 + 0.0199)^2 ≈ 1.040196 => ~1_040_196
-	got2 := fixedPow(19_900, 2)
-	// Allow small rounding: should be 1_040_196 or 1_040_197
-	if got2 < 1_040_195 || got2 > 1_040_197 {
-		t.Fatalf("expected ~1040196, got %d", got2)
+	for _, c := range cases {
+		if got := addMonths(c.base, c.months); !got.Equal(c.want) {
+			t.Fatalf("addMonths(%v,%d): want %v, got %v", c.base, c.months, c.want, got)
+		}
 	}
 }
 
-func TestFixedPow_Zero(t *testing.T) {
-	got := fixedPow(120_000, 0)
-	if got != domain.RateDenominator {
-		t.Fatalf("expected %d, got %d", domain.RateDenominator, got)
+func TestDaysBetween_IgnoresTimeZoneAndDST(t *testing.T) {
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("tzdata unavailable")
+	}
+	// Spans the 2024-03-10 DST jump: 23h day must still count as one day.
+	from := time.Date(2024, 3, 9, 12, 0, 0, 0, loc)
+	to := time.Date(2024, 3, 11, 12, 0, 0, 0, loc)
+	if got := daysBetween(from, to); got != 2 {
+		t.Fatalf("expected 2, got %d", got)
 	}
 }

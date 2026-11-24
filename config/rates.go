@@ -5,7 +5,9 @@ import "github.com/thiagozs/go-calc-charges-engine/domain"
 type IOFConfig struct {
 	DailyRate      domain.Rate `env:"IOF_DAILY_RATE" envDefault:"82"`
 	AdditionalRate domain.Rate `env:"IOF_ADDITIONAL_RATE" envDefault:"3800"`
-	MaxAnnualRate  domain.Rate `env:"IOF_MAX_ANNUAL_RATE" envDefault:"40800"`
+	// MaxDays limits the days used by the daily IOF (Decreto 6.306/2007, art. 7, par. 1: 365 days).
+	// 0 disables the limit.
+	MaxDays int `env:"IOF_MAX_DAYS" envDefault:"365"`
 }
 
 type InterestConfig struct {

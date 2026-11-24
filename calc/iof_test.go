@@ -25,6 +25,16 @@ func TestCalculateIOF(t *testing.T) {
 			days:     365,
 			expected: domain.Money(3_373), // R$ 33,73
 		},
+		{
+			name:     "days beyond 365 are not charged",
+			days:     1_000,
+			expected: domain.Money(3_373), // same as 365 days: 82*365 + 3800 = 33_730 / 1e6
+		},
+		{
+			name:     "zero days only pays the additional rate",
+			days:     0,
+			expected: domain.Money(380),
+		},
 	}
 
 	for _, tt := range tests {
@@ -34,5 +44,14 @@ func TestCalculateIOF(t *testing.T) {
 				t.Fatalf("expected %d got %d", tt.expected, iof)
 			}
 		})
+	}
+}
+
+func TestCalculateIOF_MaxDaysZeroDisablesLimit(t *testing.T) {
+	cfg := defaultIOFConfig()
+	cfg.MaxDays = 0
+	// 100_000 * 82 * 1000 / 1e6 = 8_200, + 380
+	if got := CalculateIOF(100_000, 1_000, cfg); got != 8_580 {
+		t.Fatalf("expected 8580, got %d", got)
 	}
 }

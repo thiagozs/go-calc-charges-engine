@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/thiagozs/go-calc-charges-engine/calc"
@@ -68,13 +69,13 @@ func main() {
 
 	remaining := invoice.TotalAmount - invoice.PaidAmount
 	if remaining > 0 && finalPaymentDate.After(dueDate) {
-		iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxAnnualRate: 40_800}
+		iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
 		intCfg := config.InterestConfig{MonthlyRate: 120_000}
 		lateFeeCfg := config.LateFeeConfig{Rate: 20_000}
 		lateInterestCfg := config.LateInterestConfig{MonthlyRate: 10_000}
 		rulesCfg := config.RotativeRulesConfig{MaxDays: 30, MaxChargeRate: 1_000_000}
 
-		rotative := calc.CalculateRotative(
+		rotative, err := calc.CalculateRotative(
 			domain.RotativeBalance{Principal: remaining, StartDate: dueDate},
 			finalPaymentDate,
 			iofCfg,
@@ -83,6 +84,9 @@ func main() {
 			lateInterestCfg,
 			rulesCfg,
 		)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		invoice.TotalAmount = rotative.Total
 

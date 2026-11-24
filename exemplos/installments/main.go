@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/thiagozs/go-calc-charges-engine/calc"
@@ -14,12 +15,15 @@ func main() {
 	firstDueDate := time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC)
 	amount := domain.Money(100_000) // R$ 1.000,00
 
-	iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxAnnualRate: 40_800}
+	iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
 
 	// === Sem juros (10x) ===
 	printSection("Parcelamento sem juros - 10x de R$ 1.000,00")
 
-	plan := calc.CalculateInstallmentPlan(amount, 10, purchaseDate, firstDueDate, iofCfg, config.InstallmentConfig{MonthlyRate: 0})
+	plan, err := calc.CalculateInstallmentPlan(amount, 10, purchaseDate, firstDueDate, iofCfg, config.InstallmentConfig{MonthlyRate: 0})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for _, inst := range plan.Installments {
 		fmt.Printf("  Parcela %2d | Venc: %s | Principal: %s | IOF: %s | Total: %s\n",
@@ -37,7 +41,10 @@ func main() {
 	// === Com juros (12x a 1.99% a.m.) ===
 	printSection("Parcelamento com juros - 12x de R$ 1.000,00 a 1.99% a.m.")
 
-	planJuros := calc.CalculateInstallmentPlan(amount, 12, purchaseDate, firstDueDate, iofCfg, config.InstallmentConfig{MonthlyRate: 19_900})
+	planJuros, err := calc.CalculateInstallmentPlan(amount, 12, purchaseDate, firstDueDate, iofCfg, config.InstallmentConfig{MonthlyRate: 19_900})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	for _, inst := range planJuros.Installments {
 		fmt.Printf("  Parcela %2d | Venc: %s | Principal: %s | Juros: %s | IOF: %s | Total: %s\n",

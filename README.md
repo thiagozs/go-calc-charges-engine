@@ -44,8 +44,10 @@ type Invoice struct {
 }
 
 type RotativeBalance struct {
-	Principal Money
-	StartDate time.Time
+	Principal             Money
+	StartDate             time.Time
+	OriginalDebt          Money // base do teto de 100% (0 = usa Principal)
+	ChargesAlreadyApplied Money // juros+multa+mora ja cobrados na operacao (sem IOF)
 }
 
 type InstallmentPlan struct {
@@ -74,7 +76,7 @@ Todas as taxas usam `domain.Rate` (inteiro por milhão). Para converter: `taxa_d
 type IOFConfig struct {
 	DailyRate      domain.Rate // exemplo: 82 (0,0082% a.d.)
 	AdditionalRate domain.Rate // exemplo: 3_800 (0,38% fixo)
-	MaxAnnualRate  domain.Rate // exemplo: 40_800 (4,08% a.a.)
+	MaxDays        int         // dias maximos do IOF diario: 365 (0 = sem limite)
 }
 
 type InterestConfig struct {
@@ -91,7 +93,7 @@ type LateInterestConfig struct {
 
 type RotativeRulesConfig struct {
 	MaxDays       int         // regra dos 30 dias
-	MaxChargeRate domain.Rate // teto de 100%: 1_000_000
+	MaxChargeRate domain.Rate // teto de 100% sobre juros + multa + mora (sem IOF): 1_000_000
 }
 
 type InternationalIOFConfig struct {
@@ -106,13 +108,13 @@ type InstallmentConfig struct {
 ## Configuracao via variaveis de ambiente
 
 A lib suporta carregar configuracoes via variaveis de ambiente com valores padrao.
-Os valores sao inteiros (Rate por milhão).
+Formato das taxas (`domain.Rate`, 6 casas decimais): aceita decimal com ponto (`0.12` = 12%, `0.000082`, `1.0` = 100%) ou inteiro em ponto fixo (`120000` = 12%). Um inteiro sem ponto e sempre o numerador cru: `1` e `Rate(1)`, nao 100% (escreva `1.0`). Mais de 6 casas decimais e erro. O parse e exato (`domain.ParseRate`).
 
-Principais variaveis:
+Principais variaveis (defaults em ponto fixo):
 
 - `IOF_DAILY_RATE` (default 82)
 - `IOF_ADDITIONAL_RATE` (default 3800)
-- `IOF_MAX_ANNUAL_RATE` (default 40800)
+- `IOF_MAX_DAYS` (default 365)
 - `ROTATIVE_MONTHLY_RATE` (default 120000)
 - `LATE_FEE_RATE` (default 20000)
 - `LATE_INTEREST_MONTHLY_RATE` (default 10000)
@@ -160,16 +162,8 @@ func CalculateRotative(
 	lateFeeCfg config.LateFeeConfig,
 	lateInterestCfg config.LateInterestConfig,
 	rulesCfg config.RotativeRulesConfig,
-) RotativeResult
-func ApplyPayment(
-	total domain.Money,
-	iof domain.Money,
-	interest domain.Money,
-	lateInterest domain.Money,
-	lateFee domain.Money,
-	principal domain.Money,
-	payment domain.Money,
-) AmortizationResult
+) (RotativeResult, error)
+func ApplyPayment(debt Debt, payment domain.Money) (AmortizationResult, error)
 func CalculateInstallmentPlan(
 	totalAmount domain.Money,
 	numInstallments int,
@@ -177,28 +171,32 @@ func CalculateInstallmentPlan(
 	firstDueDate time.Time,
 	iofCfg config.IOFConfig,
 	instCfg config.InstallmentConfig,
-) domain.InstallmentPlan
+) (domain.InstallmentPlan, error)
 ```
 
 Pacote `service`:
 
 ```go
 type RotativeService struct { ... }
-func (s *RotativeService) Calculate(balance domain.RotativeBalance, at time.Time) calc.RotativeResult
+func (s *RotativeService) Calculate(balance domain.RotativeBalance, at time.Time) (calc.RotativeResult, error)
 
 type InstallmentService struct { ... }
-func (s *InstallmentService) Calculate(amount domain.Money, numInstallments int, purchaseDate time.Time, firstDueDate time.Time) domain.InstallmentPlan
+func (s *InstallmentService) Calculate(amount domain.Money, numInstallments int, purchaseDate time.Time, firstDueDate time.Time) (domain.InstallmentPlan, error)
 ```
 
 ## Validacao e audit trail
 
-- **Validacao de inputs:** a engine nao valida inputs negativos. A validacao (principal >= 0, dias >= 0, datas validas) e responsabilidade do caller (ledger).
+- **Teto de 100% (Res. CMN 4.549, art. 2-A):** cobre juros remuneratorios, multa e juros de mora; o IOF fica de fora. E acumulado desde o inicio da operacao e calculado sobre o valor original da divida: preencha `RotativeBalance.OriginalDebt` e `RotativeBalance.ChargesAlreadyApplied` (soma de `RotativeResult.FinancialCharges` dos periodos anteriores). Com os dois zerados, o teto usa o `Principal` atual. Ao estourar, o corte sai dos juros, depois da mora, depois da multa.
+- **IOF:** o diario e limitado a `MaxDays` (365) dias (Decreto 6.306, art. 7, par. 1); o adicional de 0,38% e cobrado uma vez.
+- **Rotativo:** `CalculateRotative` e `RotativeService.Calculate` retornam `error` (`ErrInvalidAmount`, `ErrInvalidDate`, `ErrInvalidRate`, `ErrOverflow`). `config.LoadFromEnv` valida as taxas (`EngineConfig.Validate`).
+- **Parcelamento:** `CalculateInstallmentPlan` valida n (1..360), valor > 0, datas e taxas, e retorna `ErrInvalidInstallments`, `ErrInvalidAmount`, `ErrInvalidDate`, `ErrInvalidRate`, `ErrInfeasiblePlan` (prazo longo demais para o principal: o PMT arredondado nao amortiza) ou `ErrOverflow` (valores que nao cabem em int64). Vencimentos usam fim de mes (31/01 + 1 mes = 28/02) e dias sao contados por data civil (independe de fuso/DST).
+- **Validacao de inputs (demais calculos):** a engine nao valida inputs negativos. A validacao (principal >= 0, dias >= 0, datas validas) e responsabilidade do caller (ledger).
 - **Audit trail:** as structs de resultado (`RotativeResult`, `AmortizationResult`, `InstallmentPlan`) contem o detalhamento completo dos calculos. O caller (ledger) deve persistir essas structs como entradas no historico para fins de auditoria.
 
 ## Como usar (exemplo rapido)
 
 ```go
-iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxAnnualRate: 40_800}
+iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
 intCfg := config.InterestConfig{MonthlyRate: 120_000}
 lateFeeCfg := config.LateFeeConfig{Rate: 20_000}
 lateInterestCfg := config.LateInterestConfig{MonthlyRate: 10_000}
@@ -209,7 +207,7 @@ balance := domain.RotativeBalance{
 	StartDate: time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),
 }
 
-result := calc.CalculateRotative(
+result, err := calc.CalculateRotative(
 	balance,
 	time.Date(2024, 2, 25, 0, 0, 0, 0, time.UTC),
 	iofCfg,
@@ -221,24 +219,17 @@ result := calc.CalculateRotative(
 
 // Aplicar pagamento (ordem: IOF -> juros -> mora -> multa -> principal)
 payment := domain.Money(20_000)
-amort := calc.ApplyPayment(
-	result.Total,
-	result.IOF,
-	result.Interest,
-	result.LateInterest,
-	result.LateFee,
-	result.Principal,
-	payment,
-)
+amort, err := calc.ApplyPayment(result.Debt(), payment) // Debt{IOF, Interest, LateInterest, LateFee, Principal}
+// amort.Excess = parte do pagamento acima da divida; amort.Remaining = saldo devedor
 ```
 
 ### Parcelamento
 
 ```go
-iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxAnnualRate: 40_800}
+iofCfg := config.IOFConfig{DailyRate: 82, AdditionalRate: 3_800, MaxDays: 365}
 
 // Sem juros: 10x de R$ 1.000,00
-plan := calc.CalculateInstallmentPlan(
+plan, err := calc.CalculateInstallmentPlan(
 	100_000, 10,
 	time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), // data da compra
 	time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC), // vencimento da 1a parcela
@@ -247,7 +238,7 @@ plan := calc.CalculateInstallmentPlan(
 )
 
 // Com juros: 12x a 1.99% a.m.
-planJuros := calc.CalculateInstallmentPlan(
+planJuros, err := calc.CalculateInstallmentPlan(
 	100_000, 12,
 	time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 	time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),

@@ -1,20 +1,77 @@
 package calc
 
 import (
+	"math/big"
 	"time"
 
 	"github.com/thiagozs/go-calc-charges-engine/config"
 	"github.com/thiagozs/go-calc-charges-engine/domain"
 )
 
-// fixedPow computes (1 + rate/RateDenominator)^n in fixed point with denominator = RateDenominator.
-func fixedPow(rate domain.Rate, n int) int64 {
-	result := domain.RateDenominator
-	base := domain.RateDenominator + int64(rate)
-	for i := 0; i < n; i++ {
-		result = (result*base + domain.RateDenominator/2) / domain.RateDenominator
+// priceInstallment computes the Tabela Price payment (PMT) exactly with integer
+// arithmetic, rounded half-up to the centavo:
+//
+//	PMT = PV * r * (1+r)^n / ((1+r)^n - 1),  r = rate / RateDenominator
+//
+// Writing (1+r)^n = N / D^n with N = (D+rate)^n, this becomes
+//
+//	PMT = PV * rate * N / (D * (N - D^n))
+//
+// computed with a single division at the end. (A fixed-point power rounding at every
+// step loses precision that the small denominator (1+r)^n - 1 then amplifies.)
+// Returns ErrOverflow if the result does not fit in int64.
+func priceInstallment(pv domain.Money, rate domain.Rate, n int) (domain.Money, error) {
+	d := big.NewInt(domain.RateDenominator)
+	exp := big.NewInt(int64(n))
+	pow := new(big.Int).Exp(big.NewInt(domain.RateDenominator+int64(rate)), exp, nil) // N
+	base := new(big.Int).Exp(d, exp, nil)                                             // D^n
+
+	den := new(big.Int).Sub(pow, base)
+	den.Mul(den, d)
+	if den.Sign() <= 0 {
+		return 0, ErrInvalidRate
 	}
-	return result
+	num := new(big.Int).Mul(big.NewInt(int64(pv)), big.NewInt(int64(rate)))
+	num.Mul(num, pow)
+	num.Add(num, new(big.Int).Rsh(den, 1)) // + den/2: round half up
+	num.Quo(num, den)
+	if !num.IsInt64() {
+		return 0, ErrOverflow
+	}
+	return domain.Money(num.Int64()), nil
+}
+
+// validateInstallmentInput checks inputs and guarantees that every int64 product
+// computed by the plan calculation fits, so the arithmetic below cannot overflow silently.
+func validateInstallmentInput(
+	totalAmount domain.Money,
+	n int,
+	purchaseDate, firstDueDate time.Time,
+	iofCfg config.IOFConfig,
+	instCfg config.InstallmentConfig,
+) error {
+	if n < 1 || n > MaxInstallments {
+		return ErrInvalidInstallments
+	}
+	if totalAmount <= 0 {
+		return ErrInvalidAmount
+	}
+	if purchaseDate.IsZero() || firstDueDate.IsZero() || daysBetween(firstDueDate, purchaseDate) > 0 {
+		return ErrInvalidDate
+	}
+	if iofCfg.DailyRate < 0 || iofCfg.AdditionalRate < 0 || iofCfg.MaxDays < 0 || instCfg.MonthlyRate < 0 {
+		return ErrInvalidRate
+	}
+
+	maxDays := int64(daysBetween(purchaseDate, addMonths(firstDueDate, n-1)))
+	amount := int64(totalAmount)
+	if !mulFits(amount, int64(iofCfg.DailyRate), maxDays) ||
+		!mulFits(amount, int64(iofCfg.AdditionalRate)) ||
+		!mulFits(amount, int64(instCfg.MonthlyRate)) ||
+		!mulFits(amount, domain.RateDenominator) {
+		return ErrOverflow
+	}
+	return nil
 }
 
 // CalculateInstallmentPlan generates an installment plan for a credit card purchase.
@@ -27,7 +84,8 @@ func fixedPow(rate domain.Rate, n int) int64 {
 //   - iofCfg: IOF configuration for per-installment IOF calculation
 //   - instCfg: installment interest rate config (MonthlyRate 0 = sem juros)
 //
-// Input validation (positive amount, valid dates, n >= 1) is the caller's responsibility.
+// Returns ErrInvalidInstallments, ErrInvalidAmount, ErrInvalidDate, ErrInvalidRate,
+// ErrInfeasiblePlan or ErrOverflow when the input is invalid or too large to compute exactly in int64.
 func CalculateInstallmentPlan(
 	totalAmount domain.Money,
 	numInstallments int,
@@ -35,11 +93,14 @@ func CalculateInstallmentPlan(
 	firstDueDate time.Time,
 	iofCfg config.IOFConfig,
 	instCfg config.InstallmentConfig,
-) domain.InstallmentPlan {
+) (domain.InstallmentPlan, error) {
+	if err := validateInstallmentInput(totalAmount, numInstallments, purchaseDate, firstDueDate, iofCfg, instCfg); err != nil {
+		return domain.InstallmentPlan{}, err
+	}
 	installments := make([]domain.Installment, numInstallments)
 
 	if instCfg.MonthlyRate == 0 {
-		return calculateInterestFree(totalAmount, numInstallments, purchaseDate, firstDueDate, iofCfg, installments)
+		return calculateInterestFree(totalAmount, numInstallments, purchaseDate, firstDueDate, iofCfg, installments), nil
 	}
 	return calculateWithInterest(totalAmount, numInstallments, purchaseDate, firstDueDate, iofCfg, instCfg, installments)
 }
@@ -98,15 +159,13 @@ func calculateWithInterest(
 	iofCfg config.IOFConfig,
 	instCfg config.InstallmentConfig,
 	installments []domain.Installment,
-) domain.InstallmentPlan {
+) (domain.InstallmentPlan, error) {
 	r := instCfg.MonthlyRate
 
-	// PMT = PV * r * (1+r)^n / ((1+r)^n - 1)
-	pow := fixedPow(r, n)
-	pmtNum := int64(r) * pow
-	pmtDen := (pow - domain.RateDenominator) * domain.RateDenominator
-
-	pmt := domain.Money((int64(totalAmount)*pmtNum + pmtDen/2) / pmtDen)
+	pmt, err := priceInstallment(totalAmount, r, n)
+	if err != nil {
+		return domain.InstallmentPlan{}, err
+	}
 
 	balance := totalAmount
 	var totalInterest, totalIOF domain.Money
@@ -117,6 +176,13 @@ func calculateWithInterest(
 
 		interest := mulRate(balance, r)
 		principal := pmt - interest
+
+		// The payment is rounded to the centavo and that error compounds over the term.
+		// If a non-final installment cannot amortize (or overshoots) the balance, the plan
+		// is degenerate: reject it instead of producing negative balances or interest.
+		if i < n-1 && (principal <= 0 || principal > balance) {
+			return domain.InstallmentPlan{}, ErrInfeasiblePlan
+		}
 
 		// Last installment: adjust for rounding to ensure
 		// balance reaches zero
@@ -151,5 +217,5 @@ func calculateWithInterest(
 		TotalInterest: totalInterest,
 		TotalWithIOF:  totalAmount + totalInterest + totalIOF,
 		Installments:  installments,
-	}
+	}, nil
 }

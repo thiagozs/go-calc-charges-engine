@@ -9,8 +9,8 @@ import (
 )
 
 type InstallmentService struct {
-	IOFConfig         config.IOFConfig
-	InstallmentConfig config.InstallmentConfig
+	iofConfig         config.IOFConfig
+	installmentConfig config.InstallmentConfig
 }
 
 func (s *InstallmentService) Calculate(
@@ -18,17 +18,25 @@ func (s *InstallmentService) Calculate(
 	numInstallments int,
 	purchaseDate time.Time,
 	firstDueDate time.Time,
-) domain.InstallmentPlan {
+) (domain.InstallmentPlan, error) {
 	return calc.CalculateInstallmentPlan(
 		amount, numInstallments,
 		purchaseDate, firstDueDate,
-		s.IOFConfig, s.InstallmentConfig,
+		s.iofConfig, s.installmentConfig,
 	)
 }
 
 func NewInstallmentService(cfg config.EngineConfig) *InstallmentService {
 	return &InstallmentService{
-		IOFConfig:         cfg.IOF,
-		InstallmentConfig: cfg.Installment,
+		iofConfig:         cfg.IOF,
+		installmentConfig: cfg.Installment,
 	}
+}
+
+func NewInstallmentServiceFromEnv() (*InstallmentService, error) {
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	return NewInstallmentService(cfg), nil
 }

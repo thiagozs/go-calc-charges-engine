@@ -18,3 +18,6 @@ type Transaction struct {
 	Date          time.Time
 	International bool
 }
+
+// DaysInMonth is the commercial month length used to derive daily rates from monthly rates.
+const DaysInMonth int64 = 30

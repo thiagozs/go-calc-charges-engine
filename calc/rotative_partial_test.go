@@ -18,7 +18,7 @@ func TestRotativeWithPartialPayments(t *testing.T) {
 	}
 
 	// Primeiro período: 9 dias (01 -> 10)
-	result1 := CalculateRotative(
+	result1 := mustRotative(t,
 		balance,
 		utcDate(2024, 1, 10),
 		defaultIOFConfig(),
@@ -30,15 +30,10 @@ func TestRotativeWithPartialPayments(t *testing.T) {
 
 	// Cliente paga R$ 400,00
 	payment := domain.Money(40_000)
-	applied := ApplyPayment(
-		result1.Total,
-		result1.IOF,
-		result1.Interest,
-		result1.LateInterest,
-		result1.LateFee,
-		result1.Principal,
-		payment,
-	)
+	applied, err := ApplyPayment(result1.Debt(), payment)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	remainingPrincipal := result1.Principal - applied.PaidPrincipal
 
 	if remainingPrincipal <= 0 {
@@ -51,7 +46,7 @@ func TestRotativeWithPartialPayments(t *testing.T) {
 		StartDate: utcDate(2024, 1, 10),
 	}
 
-	result2 := CalculateRotative(
+	result2 := mustRotative(t,
 		balance2,
 		utcDate(2024, 1, 31),
 		defaultIOFConfig(),

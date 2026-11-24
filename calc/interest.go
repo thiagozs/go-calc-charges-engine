@@ -10,7 +10,7 @@ import (
 //
 // Input validation (non-negative principal, valid days) is the caller's responsibility.
 func CalculateRotativeInterest(principal domain.Money, days int, cfg config.InterestConfig) domain.Money {
-	denom := int64(30) * domain.RateDenominator
+	denom := domain.DaysInMonth * domain.RateDenominator
 	num := int64(principal) * int64(cfg.MonthlyRate) * int64(days)
 	return domain.Money((num + denom/2) / denom)
 }

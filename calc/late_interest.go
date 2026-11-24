@@ -13,7 +13,7 @@ func CalculateLateInterest(principal domain.Money, days int, cfg config.LateInte
 	if cfg.MonthlyRate <= 0 || days <= 0 {
 		return 0
 	}
-	denom := int64(30) * domain.RateDenominator
+	denom := domain.DaysInMonth * domain.RateDenominator
 	num := int64(principal) * int64(cfg.MonthlyRate) * int64(days)
 	return domain.Money((num + denom/2) / denom)
 }

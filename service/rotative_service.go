@@ -9,33 +9,33 @@ import (
 )
 
 type RotativeService struct {
-	IOFConfig          config.IOFConfig
-	InterestConfig     config.InterestConfig
-	LateFeeConfig      config.LateFeeConfig
-	LateInterestConfig config.LateInterestConfig
-	RulesConfig        config.RotativeRulesConfig
+	iofConfig          config.IOFConfig
+	interestConfig     config.InterestConfig
+	lateFeeConfig      config.LateFeeConfig
+	lateInterestConfig config.LateInterestConfig
+	rulesConfig        config.RotativeRulesConfig
 }
 
 func (s *RotativeService) Calculate(balance domain.RotativeBalance,
-	at time.Time) calc.RotativeResult {
+	at time.Time) (calc.RotativeResult, error) {
 	return calc.CalculateRotative(
 		balance,
 		at,
-		s.IOFConfig,
-		s.InterestConfig,
-		s.LateFeeConfig,
-		s.LateInterestConfig,
-		s.RulesConfig,
+		s.iofConfig,
+		s.interestConfig,
+		s.lateFeeConfig,
+		s.lateInterestConfig,
+		s.rulesConfig,
 	)
 }
 
 func NewRotativeService(cfg config.EngineConfig) *RotativeService {
 	return &RotativeService{
-		IOFConfig:          cfg.IOF,
-		InterestConfig:     cfg.Interest,
-		LateFeeConfig:      cfg.LateFee,
-		LateInterestConfig: cfg.LateInterest,
-		RulesConfig:        cfg.Rules,
+		iofConfig:          cfg.IOF,
+		interestConfig:     cfg.Interest,
+		lateFeeConfig:      cfg.LateFee,
+		lateInterestConfig: cfg.LateInterest,
+		rulesConfig:        cfg.Rules,
 	}
 }
 
